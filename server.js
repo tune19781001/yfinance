@@ -198,3 +198,66 @@ function calcRSI(closes) {
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
+// ...（上部はそのまま）
+
+// /multi-score（NEW）
+app.get('/multi-score', async (req, res) => {
+  const symbols = (req.query.symbols || "").split(',').map(s => s.trim());
+  const results = [];
+
+  for (const symbol of symbols) {
+    try {
+      const data = await fetchStockData(symbol);
+      let score = 0;
+      const comments = [];
+
+      if (data.rsi < 40) {
+        score += 5;
+        comments.push(`RSIは良好な買い圏（${data.rsi}）`);
+      } else if (data.rsi > 70) {
+        comments.push(`RSIは過熱気味（${data.rsi}）`);
+      } else {
+        score += 3;
+        comments.push(`RSIは中立〜やや買い圏（${data.rsi}）`);
+      }
+
+      if (data.price > data.ma_5 && data.ma_5 > data.ma_25) {
+        score += 5;
+        comments.push("MAは上昇傾向：価格 > MA5 > MA25");
+      } else if (data.price < data.ma_5 && data.ma_5 < data.ma_25) {
+        comments.push("MAは下降傾向：価格 < MA5 < MA25");
+      } else {
+        score += 2;
+        comments.push("MAは横ばい〜やや崩れ");
+      }
+
+      if (data.volume > 10000000) {
+        score += 5;
+        comments.push("出来高も伴っており注目されている");
+      } else {
+        score += 3;
+        comments.push("出来高は平均程度");
+      }
+
+      const judgment = score >= 12 ? "買い優勢"
+                       : score >= 8 ? "中立～やや買い"
+                       : score >= 5 ? "様子見"
+                       : "売り警戒";
+
+      results.push({
+        ...data,
+        score,
+        judgment,
+        comments
+      });
+
+    } catch (err) {
+      results.push({
+        symbol,
+        error: err.message
+      });
+    }
+  }
+
+  res.json({ results });
+});
