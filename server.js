@@ -8,51 +8,51 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ GET /stock?symbol=AAPL or 7203.T
+// ✅ 個別銘柄取得：/stock?symbol=AAPL
 app.get('/stock', async (req, res) => {
   const symbol = req.query.symbol;
-  if (!symbol) {
-    return res.status(400).json({ error: "Missing 'symbol' parameter" });
-  }
+  if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
 
   try {
-    // ✅ 米国株・日本株問わず安定して動く quote を使う
-    const quote = await yahooFinance.quote(symbol);
-
-    const historical = await yahooFinance.historical(symbol, {
-      period1: '2024-04-01',
-      period2: new Date(),
-      interval: '1d',
-    });
-
-    const closes = historical.map(d => d.close).filter(v => v != null);
-
-    const price = quote.regularMarketPrice ?? null;
-    const volume = quote.regularMarketVolume ?? null;
-    const rsi = calcRSI(closes);
-    const ma_5 = average(closes.slice(-5));
-    const ma_25 = average(closes.slice(-25));
-
-    res.json({ symbol, price, volume, rsi, ma_5, ma_25 });
+    const result = await fetchStockData(symbol);
+    res.json(result);
   } catch (err) {
-    res.status(500).json({
-      symbol,
-      price: null,
-      volume: null,
-      rsi: null,
-      ma_5: null,
-      ma_25: null,
-      error: err.message,
-    });
+    res.status(500).json({ symbol, price: null, volume: null, rsi: null, ma_5: null, ma_25: null, error: err.message });
   }
 });
 
-// ✅ GET /forex?symbol=USDJPY
+// ✅ 複数銘柄取得：/multi-stock?symbols=AAPL,7203.T
+app.get('/multi-stock', async (req, res) => {
+  const symbolsParam = req.query.symbols;
+  if (!symbolsParam) return res.status(400).json({ error: "Missing 'symbols' parameter" });
+
+  const symbols = symbolsParam.split(',').map(s => s.trim());
+  const results = [];
+
+  for (const symbol of symbols) {
+    try {
+      const data = await fetchStockData(symbol);
+      results.push(data);
+    } catch (err) {
+      results.push({
+        symbol,
+        price: null,
+        volume: null,
+        rsi: null,
+        ma_5: null,
+        ma_25: null,
+        error: err.message
+      });
+    }
+  }
+
+  res.json({ results });
+});
+
+// ✅ 為替：/forex?symbol=USDJPY
 app.get('/forex', async (req, res) => {
   const symbol = req.query.symbol;
-  if (!symbol) {
-    return res.status(400).json({ error: "Missing 'symbol' parameter" });
-  }
+  if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
 
   try {
     const quote = await yahooFinance.quote(symbol + "=X");
@@ -62,7 +62,7 @@ app.get('/forex', async (req, res) => {
   }
 });
 
-// ✅ GET /etf
+// ✅ ETF一覧：/etf
 app.get('/etf', async (req, res) => {
   const symbols = ["SPY", "QQQ", "XLK", "ARKK"];
   try {
@@ -83,6 +83,27 @@ app.get('/etf', async (req, res) => {
     res.status(500).json({ etfs: [], error: err.message });
   }
 });
+
+// 🔧 共通ロジック：個別銘柄の取得と整形
+async function fetchStockData(symbol) {
+  const quote = await yahooFinance.quote(symbol);
+
+  const historical = await yahooFinance.historical(symbol, {
+    period1: '2024-04-01',
+    period2: new Date(),
+    interval: '1d',
+  });
+
+  const closes = historical.map(d => d.close).filter(v => v != null);
+
+  const price = quote.regularMarketPrice ?? null;
+  const volume = quote.regularMarketVolume ?? null;
+  const rsi = calcRSI(closes);
+  const ma_5 = average(closes.slice(-5));
+  const ma_25 = average(closes.slice(-25));
+
+  return { symbol, price, volume, rsi, ma_5, ma_25 };
+}
 
 // ➕ 補助関数
 function average(arr) {
