@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ 個別銘柄取得：/stock?symbol=AAPL
+// ✅ /stock?symbol=XXXX
 app.get('/stock', async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
@@ -21,7 +21,7 @@ app.get('/stock', async (req, res) => {
   }
 });
 
-// ✅ 複数銘柄取得：/multi-stock?symbols=AAPL,7203.T
+// ✅ /multi-stock?symbols=AAA,BBB
 app.get('/multi-stock', async (req, res) => {
   const symbolsParam = req.query.symbols;
   if (!symbolsParam) return res.status(400).json({ error: "Missing 'symbols' parameter" });
@@ -49,7 +49,67 @@ app.get('/multi-stock', async (req, res) => {
   res.json({ results });
 });
 
-// ✅ 為替：/forex?symbol=USDJPY
+// ✅ /score?symbol=XXXX ← New!
+app.get('/score', async (req, res) => {
+  const symbol = req.query.symbol;
+  if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
+
+  try {
+    const data = await fetchStockData(symbol);
+
+    let score = 0;
+    const comments = [];
+
+    // ✅ RSI評価
+    if (data.rsi != null) {
+      if (data.rsi < 40) {
+        score += 5;
+        comments.push(`RSIは良好な買い圏（${data.rsi}）`);
+      } else if (data.rsi > 70) {
+        comments.push(`RSIは過熱気味（${data.rsi}）`);
+      } else {
+        score += 3;
+        comments.push(`RSIは中立〜やや買い圏（${data.rsi}）`);
+      }
+    } else {
+      comments.push("RSIが取得できませんでした");
+    }
+
+    // ✅ MA評価
+    if (data.price > data.ma_5 && data.ma_5 > data.ma_25) {
+      score += 5;
+      comments.push("MAは上昇傾向：価格 > MA5 > MA25");
+    } else if (data.price < data.ma_5 && data.ma_5 < data.ma_25) {
+      comments.push("MAは下降傾向：価格 < MA5 < MA25");
+    } else {
+      score += 2;
+      comments.push("MAは横ばい〜やや崩れ");
+    }
+
+    // ✅ 出来高（volume）評価
+    if (data.volume != null && data.volume > 10000000) {
+      score += 5;
+      comments.push("出来高も伴っており注目されている");
+    } else if (data.volume != null) {
+      score += 3;
+      comments.push("出来高は平均程度");
+    } else {
+      comments.push("出来高情報が取得できませんでした");
+    }
+
+    const judgment = score >= 12 ? "買い優勢"
+                     : score >= 8 ? "中立～やや買い"
+                     : score >= 5 ? "様子見"
+                     : "売り警戒";
+
+    res.json({ symbol, score, judgment, comments });
+
+  } catch (err) {
+    res.status(500).json({ symbol, score: 0, judgment: "取得失敗", comments: [err.message] });
+  }
+});
+
+// ✅ /forex?symbol=USDJPY
 app.get('/forex', async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
@@ -62,7 +122,7 @@ app.get('/forex', async (req, res) => {
   }
 });
 
-// ✅ ETF一覧：/etf
+// ✅ /etf
 app.get('/etf', async (req, res) => {
   const symbols = ["SPY", "QQQ", "XLK", "ARKK"];
   try {
@@ -84,10 +144,9 @@ app.get('/etf', async (req, res) => {
   }
 });
 
-// 🔧 共通ロジック：個別銘柄の取得と整形
+// 🔧 データ取得ロジック
 async function fetchStockData(symbol) {
   const quote = await yahooFinance.quote(symbol);
-
   const historical = await yahooFinance.historical(symbol, {
     period1: '2024-04-01',
     period2: new Date(),
@@ -108,27 +167,21 @@ async function fetchStockData(symbol) {
 // ➕ 補助関数
 function average(arr) {
   const valid = arr.filter(v => v != null);
-  return valid.length > 0
-    ? valid.reduce((a, b) => a + b, 0) / valid.length
-    : null;
+  return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
 }
 
 function calcRSI(closes) {
   if (closes.length < 15) return null;
-
   let gains = 0, losses = 0;
   for (let i = closes.length - 15; i < closes.length - 1; i++) {
     const diff = closes[i + 1] - closes[i];
     if (diff > 0) gains += diff;
     else losses -= diff;
   }
-
   const avgGain = gains / 14;
   const avgLoss = losses / 14;
-
   if (avgLoss === 0) return 100;
   if (avgGain === 0) return 0;
-
   const rs = avgGain / avgLoss;
   return Math.round((100 - (100 / (1 + rs))) * 10) / 10;
 }
