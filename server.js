@@ -18,7 +18,7 @@ app.get('/stock', async (req, res) => {
   try {
     const quote = await yahooFinance.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] });
 
-    // ✅ historical APIに置き換え
+    // ✅ historical APIを使用
     const historical = await yahooFinance.historical(symbol, {
       period1: '2024-04-01',
       period2: new Date(),
@@ -101,13 +101,18 @@ function calcRSI(closes) {
     if (diff > 0) gains += diff;
     else losses -= diff;
   }
+
   const avgGain = gains / 14;
   const avgLoss = losses / 14;
-  const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-  return Math.round(100 - (100 / (1 + rs)) * 10) / 10;
+
+  if (avgLoss === 0) return 100;
+  if (avgGain === 0) return 0;
+
+  const rs = avgGain / avgLoss;
+  return Math.round((100 - (100 / (1 + rs))) * 10) / 10;
 }
 
-// 🚀 サーバー起動
+// 🚀 起動
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
