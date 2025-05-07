@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ GET /stock?symbol=AAPL
+// ✅ GET /stock?symbol=AAPL or 7203.T
 app.get('/stock', async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) {
@@ -16,9 +16,9 @@ app.get('/stock', async (req, res) => {
   }
 
   try {
-    const quote = await yahooFinance.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] });
+    // ✅ 米国株・日本株問わず安定して動く quote を使う
+    const quote = await yahooFinance.quote(symbol);
 
-    // ✅ historical APIを使用
     const historical = await yahooFinance.historical(symbol, {
       period1: '2024-04-01',
       period2: new Date(),
@@ -27,8 +27,8 @@ app.get('/stock', async (req, res) => {
 
     const closes = historical.map(d => d.close).filter(v => v != null);
 
-    const price = quote.price?.regularMarketPrice ?? null;
-    const volume = quote.price?.regularMarketVolume ?? null;
+    const price = quote.regularMarketPrice ?? null;
+    const volume = quote.regularMarketVolume ?? null;
     const rsi = calcRSI(closes);
     const ma_5 = average(closes.slice(-5));
     const ma_25 = average(closes.slice(-25));
