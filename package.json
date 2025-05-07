@@ -1,0 +1,26 @@
+{
+  "name": "yfinance",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tune19781001/yfinance.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tune19781001/yfinance/issues"
+  },
+  "homepage": "https://github.com/tune19781001/yfinance#readme",
+  "description": "",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "yahoo-finance2": "^2.13.3"
+  }
+}
