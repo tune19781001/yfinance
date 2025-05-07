@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// ✅ /stock?symbol=XXXX
+// ✅ /stock
 app.get('/stock', async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
@@ -21,7 +21,7 @@ app.get('/stock', async (req, res) => {
   }
 });
 
-// ✅ /multi-stock?symbols=AAA,BBB
+// ✅ /multi-stock
 app.get('/multi-stock', async (req, res) => {
   const symbolsParam = req.query.symbols;
   if (!symbolsParam) return res.status(400).json({ error: "Missing 'symbols' parameter" });
@@ -49,7 +49,7 @@ app.get('/multi-stock', async (req, res) => {
   res.json({ results });
 });
 
-// ✅ /score?symbol=XXXX ← New!
+// ✅ /score（詳細データ付き）
 app.get('/score', async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
@@ -60,7 +60,7 @@ app.get('/score', async (req, res) => {
     let score = 0;
     const comments = [];
 
-    // ✅ RSI評価
+    // RSI評価
     if (data.rsi != null) {
       if (data.rsi < 40) {
         score += 5;
@@ -75,7 +75,7 @@ app.get('/score', async (req, res) => {
       comments.push("RSIが取得できませんでした");
     }
 
-    // ✅ MA評価
+    // MA評価
     if (data.price > data.ma_5 && data.ma_5 > data.ma_25) {
       score += 5;
       comments.push("MAは上昇傾向：価格 > MA5 > MA25");
@@ -86,7 +86,7 @@ app.get('/score', async (req, res) => {
       comments.push("MAは横ばい〜やや崩れ");
     }
 
-    // ✅ 出来高（volume）評価
+    // 出来高評価
     if (data.volume != null && data.volume > 10000000) {
       score += 5;
       comments.push("出来高も伴っており注目されている");
@@ -102,14 +102,19 @@ app.get('/score', async (req, res) => {
                      : score >= 5 ? "様子見"
                      : "売り警戒";
 
-    res.json({ symbol, score, judgment, comments });
+    res.json({
+      ...data,       // 価格・RSI・MA・volumeなどすべて含む
+      score,
+      judgment,
+      comments
+    });
 
   } catch (err) {
     res.status(500).json({ symbol, score: 0, judgment: "取得失敗", comments: [err.message] });
   }
 });
 
-// ✅ /forex?symbol=USDJPY
+// ✅ /forex
 app.get('/forex', async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
@@ -144,7 +149,7 @@ app.get('/etf', async (req, res) => {
   }
 });
 
-// 🔧 データ取得ロジック
+// 🔧 共通データ取得ロジック
 async function fetchStockData(symbol) {
   const quote = await yahooFinance.quote(symbol);
   const historical = await yahooFinance.historical(symbol, {
@@ -164,7 +169,7 @@ async function fetchStockData(symbol) {
   return { symbol, price, volume, rsi, ma_5, ma_25 };
 }
 
-// ➕ 補助関数
+// 🔧 補助関数
 function average(arr) {
   const valid = arr.filter(v => v != null);
   return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
