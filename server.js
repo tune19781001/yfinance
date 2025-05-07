@@ -17,19 +17,33 @@ app.get('/stock', async (req, res) => {
 
   try {
     const quote = await yahooFinance.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] });
-    const chart = await yahooFinance._chart(symbol, { range: '5d', interval: '1d' });
 
-    const price = quote.price.regularMarketPrice;
-    const volume = quote.price.regularMarketVolume;
+    // ✅ historical APIに置き換え
+    const historical = await yahooFinance.historical(symbol, {
+      period1: '2024-04-01',
+      period2: new Date(),
+      interval: '1d',
+    });
 
-    const closes = chart.chart.result[0].indicators.quote[0].close;
+    const closes = historical.map(d => d.close).filter(v => v != null);
+
+    const price = quote.price?.regularMarketPrice ?? null;
+    const volume = quote.price?.regularMarketVolume ?? null;
     const rsi = calcRSI(closes);
     const ma_5 = average(closes.slice(-5));
     const ma_25 = average(closes.slice(-25));
 
     res.json({ symbol, price, volume, rsi, ma_5, ma_25 });
   } catch (err) {
-    res.status(500).json({ symbol, price: null, volume: null, rsi: null, ma_5: null, ma_25: null, error: err.message });
+    res.status(500).json({
+      symbol,
+      price: null,
+      volume: null,
+      rsi: null,
+      ma_5: null,
+      ma_25: null,
+      error: err.message,
+    });
   }
 });
 
@@ -60,7 +74,7 @@ app.get('/etf', async (req, res) => {
           price: quote.regularMarketPrice,
           change: quote.regularMarketChange,
           changesPercentage: quote.regularMarketChangePercent,
-          previousClose: quote.regularMarketPreviousClose
+          previousClose: quote.regularMarketPreviousClose,
         };
       })
     );
@@ -73,10 +87,14 @@ app.get('/etf', async (req, res) => {
 // ➕ 補助関数
 function average(arr) {
   const valid = arr.filter(v => v != null);
-  return valid.reduce((a, b) => a + b, 0) / valid.length;
+  return valid.length > 0
+    ? valid.reduce((a, b) => a + b, 0) / valid.length
+    : null;
 }
 
 function calcRSI(closes) {
+  if (closes.length < 15) return null;
+
   let gains = 0, losses = 0;
   for (let i = closes.length - 15; i < closes.length - 1; i++) {
     const diff = closes[i + 1] - closes[i];
@@ -85,11 +103,11 @@ function calcRSI(closes) {
   }
   const avgGain = gains / 14;
   const avgLoss = losses / 14;
-  const rs = avgGain / (avgLoss || 1);
-  return 100 - (100 / (1 + rs));
+  const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+  return Math.round(100 - (100 / (1 + rs)) * 10) / 10;
 }
 
-// 🚀 起動
+// 🚀 サーバー起動
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
