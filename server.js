@@ -3,7 +3,8 @@ import cors from 'cors';
 import yahooFinance from 'yahoo-finance2';
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT;
+if (!port) throw new Error("PORT environment variable not set");
 
 app.use(cors());
 app.use(express.json());
@@ -49,7 +50,7 @@ app.get('/multi-stock', async (req, res) => {
   res.json({ results });
 });
 
-// ✅ /score（詳細データ付き）
+// ✅ /score（詳細データ＋スコア）
 app.get('/score', async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ error: "Missing 'symbol' parameter" });
@@ -103,7 +104,7 @@ app.get('/score', async (req, res) => {
                      : "売り警戒";
 
     res.json({
-      ...data,       // 価格・RSI・MA・volumeなどすべて含む
+      ...data,
       score,
       judgment,
       comments
@@ -191,7 +192,7 @@ function calcRSI(closes) {
   return Math.round((100 - (100 / (1 + rs))) * 10) / 10;
 }
 
-// 🚀 起動
+// 🚀 起動（PORTが必須）
 app.listen(port, () => {
-  console.log(`Server running at http://localhost:${port}`);
+  console.log(`Server running on port ${port}`);
 });
